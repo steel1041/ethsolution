@@ -1,6 +1,6 @@
 pragma solidity ^0.4.16;
 
-contract SETHToken  {
+contract SETH  {
 
     string public name     = "S Ether";
     string public symbol   = "SETH";
@@ -12,17 +12,10 @@ contract SETHToken  {
 
     event Approval(address indexed src, address indexed guy, uint wad);
     event Transfer(address indexed src, address indexed dst, uint wad);
-    
-    event Mint(address indexed guy, uint wad);
-    event Burn(address indexed guy, uint wad);
     event Deposit(address indexed dst, uint wad);
     event Withdrawal(address indexed src, uint wad);
     
-    function() public payable {
-        deposit();
-    }
-    
-    function deposit() public payable {
+    function SETH() public payable {
         _balances[msg.sender] += msg.value;
         _supply = add(_supply, msg.value);
         Deposit(msg.sender, msg.value);
@@ -34,10 +27,6 @@ contract SETHToken  {
         msg.sender.transfer(wad);
         _supply = sub(_supply, wad);
         Withdrawal(msg.sender, wad);
-    }
-    
-    function approve(address guy) public  returns (bool) {
-        return approve(guy, uint(-1));
     }
 
     function transferFrom(address src, address dst, uint wad)

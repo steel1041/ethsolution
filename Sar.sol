@@ -10,90 +10,9 @@ contract DSMath {
     function mul(uint x, uint y) internal  returns (uint z) {
         require(y == 0 || (z = x * y) / y == x);
     }
-
-    function min(uint x, uint y) internal  returns (uint z) {
-        return x <= y ? x : y;
-    }
-    function max(uint x, uint y) internal  returns (uint z) {
-        return x >= y ? x : y;
-    }
-    function imin(int x, int y) internal  returns (int z) {
-        return x <= y ? x : y;
-    }
-    function imax(int x, int y) internal  returns (int z) {
-        return x >= y ? x : y;
-    }
-
     uint constant WAD = 10 ** 18;
     uint constant RAY = 10 ** 27;
 
-    function wmul(uint x, uint y) internal  returns (uint z) {
-        z = add(mul(x, y), WAD / 2) / WAD;
-    }
-    function rmul(uint x, uint y) internal  returns (uint z) {
-        z = add(mul(x, y), RAY / 2) / RAY;
-    }
-    function wdiv(uint x, uint y) internal  returns (uint z) {
-        z = add(mul(x, WAD), y / 2) / y;
-    }
-    function rdiv(uint x, uint y) internal  returns (uint z) {
-        z = add(mul(x, RAY), y / 2) / y;
-    }
-
-    // This famous algorithm is called "exponentiation by squaring"
-    // and calculates x^n with x as fixed-point and n as regular unsigned.
-    //
-    // It's O(log n), instead of O(n) for naive repeated multiplication.
-    //
-    // These facts are why it works:
-    //
-    //  If n is even, then x^n = (x^2)^(n/2).
-    //  If n is odd,  then x^n = x * x^(n-1),
-    //   and applying the equation for even x gives
-    //    x^n = x * (x^2)^((n-1) / 2).
-    //
-    //  Also, EVM division is flooring and
-    //    floor[(n-1) / 2] = floor[n / 2].
-    //
-    function rpow(uint x, uint n) internal  returns (uint z) {
-        z = n % 2 != 0 ? x : RAY;
-
-        for (n /= 2; n != 0; n /= 2) {
-            x = rmul(x, x);
-
-            if (n % 2 != 0) {
-                z = rmul(z, x);
-            }
-        }
-    }
-}
-
-contract AdminCon {
-    address public admin;
-
-    bool public off;
-    function owned() {
-        admin = msg.sender;
-    }
-
-    modifier onlyAdmin {
-        require(msg.sender == admin);
-        _;
-    }
-    
-    modifier onlyOff {
-        require(off);
-        _;
-    }
-
-    // 实现所有权转移
-    function transferOwnership(address newAdmin) onlyAdmin {
-        admin = newAdmin;
-    }
-    
-    function setOffStatus(bool status) onlyAdmin{
-        off = status;
-    }
 }
 
 contract SDUSDToken{
@@ -112,12 +31,32 @@ contract SETHToken{
   function transferFrom(address src, address dst, uint wad) public returns(bool);
 }
 
-contract Oracle{
+contract OracleToken{
      function getConfig(string key) public view returns(uint value);
      function getPrice(string key) public view returns(uint128 value);
 }
 
-contract SarTub is DSMath,AdminCon{
+contract Admin {
+    address public admin;
+
+    bool public off;
+    function Admin() {
+        admin = msg.sender;
+    }
+
+    modifier onlyAdmin {
+        require(msg.sender == admin);
+        _;
+    }
+    
+    modifier onlyOff {
+        require(off);
+        _;
+    }
+
+}
+
+contract SAR is DSMath,Admin{
 
     uint constant POWNER_TEN = 10 ** 10;
     uint256 public bondGlobal;
@@ -126,15 +65,37 @@ contract SarTub is DSMath,AdminCon{
     mapping (address => bool) public  bondStatus;
     
     event Operated(address indexed from,uint opType,uint256 opValue);
-
+    event Operatedfee(address indexed from,uint256 fee);
+    
     SETHToken public seth;
     SDUSDToken  public  sdusd;
-    Oracle public oracle;
+    OracleToken public oracle;
     
     
-    function SarTub(SETHToken seth_,SDUSDToken  sdusd_,Oracle oracle_) public{
+    function SAR(SETHToken seth_,SDUSDToken  sdusd_,OracleToken oracle_) public{
         seth = seth_;
         sdusd = sdusd_;
+        oracle = oracle_;
+    }
+    
+    //实现所有权转移
+    function transferOwnership(address newAdmin) onlyAdmin public{
+        admin = newAdmin;
+    }
+    //设置开关 
+    function setOffStatus(bool status) onlyAdmin public{
+        off = status;
+    }
+    
+    function setSETH(SETHToken seth_) onlyAdmin public{
+        seth = seth_;
+    }
+    
+    function setSDUSD(SDUSDToken sdusd_) onlyAdmin public{
+        sdusd = sdusd_;
+    }
+    
+    function setOracle(OracleToken oracle_) onlyAdmin public{
         oracle = oracle_;
     }
     
@@ -201,14 +162,18 @@ contract SarTub is DSMath,AdminCon{
     
     //--SAR-operations--------------------------------------------------
     function open() public returns (bool success) {
+        require(off);
         require(!sarStatus[msg.sender]);    //Check status
         sars[msg.sender] = Sar(msg.sender,0,0,0,0,block.number,0);
         sarStatus[msg.sender] = true;
         Operated(msg.sender,1,0);
+    
         return true;
     }
     
     function reserve(uint256 wad) public returns (bool success){
+        require(off);
+        require(wad>0);
         require(sarStatus[msg.sender]);    //Check status
         require(msg.sender == owner(msg.sender));
         require(seth.transferFrom(msg.sender,this,wad));
@@ -218,6 +183,8 @@ contract SarTub is DSMath,AdminCon{
     }
     
     function withdraw(uint256 mount) public  returns (bool success){
+        require(off);
+        require(mount>0);
         require(sarStatus[msg.sender]);   
         require(msg.sender == owner(msg.sender));
         
@@ -225,7 +192,6 @@ contract SarTub is DSMath,AdminCon{
         uint256 lockedMount = locked(msg.sender); 
         
         require(lockedMount >= mount);
-        
         require(mul(sub(lockedMount,mount),ethPrice()) >= mul(hasDrawedMount,liquidateLineRate()));
         
         require(seth.transfer(msg.sender,mount));
@@ -235,6 +201,8 @@ contract SarTub is DSMath,AdminCon{
     }
 
     function expande(uint256 wad) public  returns (bool success){
+        require(off);
+        require(wad>0);
         require(sarStatus[msg.sender]);
         require(msg.sender == owner(msg.sender));
         
@@ -242,7 +210,7 @@ contract SarTub is DSMath,AdminCon{
         require(debtTop() >= add(hasDrawedMount, wad));
         
         uint256 lockedMount = locked(msg.sender);
-        uint256 maxMount = mul(lockedMount,ethPrice());
+        uint256 maxMount = mul(lockedMount,mul(ethPrice(),100));
         uint256 checkMount = mul(add(hasDrawedMount, wad),liquidateLineRate());
         require(maxMount >= checkMount);
         
@@ -254,7 +222,7 @@ contract SarTub is DSMath,AdminCon{
             sars[msg.sender].lastHeight = lastHeightNumer;
             sars[msg.sender].fee = 0;
         }else{
-            uint256 currFee = (lastHeightNumer - lastHeight(msg.sender)) * hasDrawedMount * feeRate() / POWNER_TEN;
+            uint256 currFee = mul(mul(sub(lastHeightNumer,lastHeight(msg.sender)),hasDrawedMount),feeRate()) / POWNER_TEN;
             sars[msg.sender].lastHeight = lastHeightNumer;
             sars[msg.sender].fee = currFee + fee(msg.sender);
         }
@@ -263,6 +231,7 @@ contract SarTub is DSMath,AdminCon{
     }
     
     function contr(uint256 wad) public  returns (bool success){
+        require(off);
         require(wad > 0);
         require(sarStatus[msg.sender]);
         require(msg.sender == owner(msg.sender));
@@ -271,9 +240,9 @@ contract SarTub is DSMath,AdminCon{
         require(hasDrawedMount >= wad);
         
         uint lastHeightNumer = block.number;
-        
-        uint256 currFee = (lastHeightNumer - lastHeight(msg.sender)) * hasDrawedMount * feeRate() / POWNER_TEN;
-        uint256 needUSDFee = add(currFee,fee(msg.sender)) * wad / hasDrawedMount;
+        //手续费外扣 
+        uint256 currFee = mul(mul(sub(lastHeightNumer,lastHeight(msg.sender)),hasDrawedMount),feeRate()) / POWNER_TEN;
+        uint256 needUSDFee = mul(add(currFee,fee(msg.sender)),wad) / hasDrawedMount;
 
         require(sdusd.balanceOf(msg.sender) >= add(wad,needUSDFee));
         
@@ -284,10 +253,12 @@ contract SarTub is DSMath,AdminCon{
         require(sdusd.transferFrom(msg.sender,this,needUSDFee));
         sdusd.burn(msg.sender,wad);
         Operated(msg.sender,5,wad);
+        Operatedfee(msg.sender,needUSDFee);
         return true;
     }
     
     function rescue(address dest,uint256 wad) public  returns (bool success){
+        require(off);
         require(wad > 0);
         require(sarStatus[msg.sender]);
         require(sarStatus[dest]);
@@ -297,11 +268,11 @@ contract SarTub is DSMath,AdminCon{
         uint currentRate = mul(lockedMount,ethPrice())/mul(hasDrawedMount,100);
         uint rateClear = getRateClear(currentRate,liquidateDisRate());
         
-        require(mul(lockedMount,ethPrice())<mul(hasDrawedMount,feeRate()));
+        require(mul(lockedMount,ethPrice())<mul(hasDrawedMount,liquidateLineRate()));
         
         uint256 canClear = 0;
-        if(currentRate>100 && currentRate<feeRate()){
-             canClear = wad / (ethPrice() * rateClear);
+        if(currentRate>100 && currentRate<liquidateLineRate()){
+             canClear = wad / mul(ethPrice(),rateClear);
              
              require(canClear > 0);
              require(canClear < lockedMount);
@@ -336,6 +307,7 @@ contract SarTub is DSMath,AdminCon{
     }
     
     function rescueT(uint256 bondMount) public  returns (bool success){
+        require(off);
         require(bondMount > 0);
         require(sarStatus[msg.sender]);
         require(bondStatus[msg.sender]);
@@ -368,11 +340,12 @@ contract SarTub is DSMath,AdminCon{
         sars[msg.sender].bondLocked = add(sars[msg.sender].bondLocked,canClear);
         sars[msg.sender].bondDrawed = add(sars[msg.sender].bondDrawed,bondMount);
         bondGlobal = add(bondGlobal,bondMount);
-        Operated(msg.sender,6,bondMount);
+        Operated(msg.sender,7,bondMount);
         return true;
     }
     
     function withdrawT(uint256 mount) public  returns (bool success){
+        require(off);
         require(mount > 0);
         require(sarStatus[msg.sender]);
         require(bondStatus[msg.sender]);
@@ -402,6 +375,7 @@ contract SarTub is DSMath,AdminCon{
 
 
     function close() public  returns (bool success){
+        require(off);
         require(sarStatus[msg.sender]);
         require(msg.sender == owner(msg.sender));
         require(locked(msg.sender)==0);
@@ -411,7 +385,7 @@ contract SarTub is DSMath,AdminCon{
         require(bondDrawed(msg.sender)==0);
         
         sarStatus[msg.sender] = false;
-        Operated(msg.sender,7,0);
+        Operated(msg.sender,9,0);
         return true;
     }
     

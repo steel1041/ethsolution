@@ -1,9 +1,9 @@
 pragma solidity ^0.4.16;
 
-contract owned {
+contract Admin {
     address public owner;
 
-    function owned() {
+    function Admin() {
         owner = msg.sender;
     }
 
@@ -11,44 +11,26 @@ contract owned {
         require(msg.sender == owner);
         _;
     }
-
-    // 实现所有权转移
-    function transferOwnership(address newOwner) onlyOwner {
-        owner = newOwner;
-    }
 }
 
-contract Oracle is owned{
+contract Oracle is Admin{
     string constant configKey = "configKey";
     string constant priceKey = "priceKey";
     Config public config;
+    
     mapping (string => uint)  configMapping;   //config
     mapping (string => uint128)  priceMapping;     //prices
     mapping (address => bool)  public auths;  //auths
   
     event OracleOperated(address indexed from,string opType,uint256 opValue);
     
-    //Oracle config 
-    struct Config
-    {
-        uint liquidate_line_rate_c;
-        
-        uint liquidate_dis_rate_c;
-        
-        uint fee_rate_c;
-        
-        uint liquidate_top_rate_c;
-        
-        uint liquidate_line_rateT_c;
-        
-        uint issuing_fee_c;
-        
-        uint debt_top_c;
+    
+    function Oracle() public {
     }
     
-    function Oracle(address admin) public {
-        if(admin != 0 ) owner = admin;
-        auths[admin] = true;
+        // 实现所有权转移
+    function transferOwnership(address newOwner) onlyOwner {
+        owner = newOwner;
     }
     
     function flush() public onlyOwner{
@@ -89,7 +71,25 @@ contract Oracle is owned{
         return true;
     }
     
-     function getPrice(string key) public view returns(uint128 value){
+    function getPrice(string key) public view returns(uint128 value){
         return priceMapping[key];
+    }
+    
+        //Oracle config 
+    struct Config
+    {
+        uint liquidate_line_rate_c;
+        
+        uint liquidate_dis_rate_c;
+        
+        uint fee_rate_c;
+        
+        uint liquidate_top_rate_c;
+        
+        uint liquidate_line_rateT_c;
+        
+        uint issuing_fee_c;
+        
+        uint debt_top_c;
     }
 }
