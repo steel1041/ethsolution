@@ -1,13 +1,6 @@
-pragma solidity ^0.4.16;
+pragma solidity ^0.5.2;
 
-contract Admin {
-    address public admin;
-
-    modifier onlyAdmin {
-        require(msg.sender == admin);
-        _;
-    }
-}
+import "./admin.sol";
 
 contract SDUSD is Admin{
     uint256                                            _supply;
@@ -26,20 +19,13 @@ contract SDUSD is Admin{
     event Transfer(address indexed src, address indexed dst, uint wad);
     
     
-    function SDUSD() public {
-        admin = msg.sender;
+    constructor () public {
         _balances[msg.sender] = 0;
         _supply = 0;
         
     }
     
-    
-    // 实现所有权转移
-    function transferOwnership(address newAdmin) onlyAdmin {
-        admin = newAdmin;
-    }
-    
-    function setAuth(address addr,bool result) onlyAdmin{
+    function setAuth(address addr,bool result) public onlyAdmin{
         auths[addr] = result;
     }
     
@@ -60,7 +46,7 @@ contract SDUSD is Admin{
     function approve(address guy, uint wad) public returns (bool) {
         _approvals[msg.sender][guy] = wad;
 
-        Approval(msg.sender, guy, wad);
+        emit Approval(msg.sender, guy, wad);
         return true;
     }
     
@@ -74,7 +60,7 @@ contract SDUSD is Admin{
         _balances[src] = sub(_balances[src], wad);
         _balances[dst] = add(_balances[dst], wad);
 
-        Transfer(src, dst, wad);
+        emit Transfer(src, dst, wad);
         return true;
     }
     
@@ -83,7 +69,7 @@ contract SDUSD is Admin{
         require(auths[msg.sender]);
         _balances[guy] = add(_balances[guy], wad);
         _supply = add(_supply, wad);
-        Mint(guy, wad);
+        emit Mint(guy, wad);
     }
     
     function burn(address guy, uint wad) public   {
@@ -91,14 +77,7 @@ contract SDUSD is Admin{
         require(auths[msg.sender]);
         _balances[guy] = sub(_balances[guy], wad);
         _supply = sub(_supply, wad);
-        Burn(guy, wad);
+        emit Burn(guy, wad);
     }
     
-    function add(uint x, uint y) internal  returns (uint z) {
-        require((z = x + y) >= x);
-    }
-    
-    function sub(uint x, uint y) internal  returns (uint z) {
-        require((z = x - y) <= x);
-    }
 }

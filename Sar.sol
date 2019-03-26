@@ -1,4 +1,6 @@
-pragma solidity ^0.4.16;
+pragma solidity ^0.5.2;
+
+import "./admin.sol";
 
 contract SDUSDToken{
     function mint(address guy, uint wad) public;
@@ -10,35 +12,20 @@ contract SDUSDToken{
 }
 
 contract SETHToken{
-  function totalSupply() public view returns (uint);
-  function balanceOf(address src) public view returns (uint);
-  function transfer(address dst, uint wad) public returns(bool);
-  function transferFrom(address src, address dst, uint wad) public returns(bool);
+    function totalSupply() public view returns (uint);
+    function balanceOf(address src) public view returns (uint);
+    function transfer(address dst, uint wad) public returns(bool);
+    function transferFrom(address src, address dst, uint wad) public returns(bool);
 }
 
 contract OracleToken{
-     function getConfig(string key) public view returns(uint value);
-     function getPrice(string key) public view returns(uint128 value);
+    function getConfig(string memory key) public view returns(uint value);
+    function getPrice(string memory key) public view returns(uint128 value);
 }
 
-contract Admin {
-    address public admin;
-    
-    bool public off;
-    function Admin() {
-        admin = msg.sender;
-    }
-
-    modifier onlyAdmin {
-        require(msg.sender == admin);
-        _;
-    }
-    
-    modifier onlyOff {
-        require(off);
-        _;
-    }
-
+contract SARToken{
+    function createSAR(address addr,uint256 locked,uint256 hasDrawed,uint256 bondLocked,
+                        uint256 bondDrawed,uint256 lastHeight,uint256 fee) public returns(bool);
 }
 
 contract SAR is Admin{
@@ -58,33 +45,65 @@ contract SAR is Admin{
     mapping (address => Sar)  public  sars;
     mapping (address => bool) public  sarStatus;     //sarExistStatus
     mapping (address => bool) public  bondStatus;
+    //mapping (string => address) public accounts;
+    
     address public feeAccount;
-
+    address public newAccount;
+    address public oldAccount;
+    
     event Operated(address indexed from,uint opType,uint256 opValue);
     event Operatedfee(address indexed from,uint256 fee);
     
     SETHToken public seth;
     SDUSDToken  public  sdusd;
     OracleToken public oracle;
+    SARToken public sar;
     
+    struct Sar 
+    {
+        //SAR owner
+        address owner;
+
+        //amount of locked collateral
+        uint256 locked;
+
+        //amount of issued sdusd  
+        uint256 hasDrawed;
+
+        //amount of used bond
+        uint256 bondLocked;
+
+        //amount of sdusd liquidated by bond
+        uint256 bondDrawed;
+
+        //block 
+        uint256 lastHeight;
+
+        //amount of stable fee(sdusd)
+        uint256 fee;
+    }
     
-    function SAR(SETHToken seth_,SDUSDToken  sdusd_,OracleToken oracle_) public{
+    constructor(
+        SETHToken seth_,
+        SDUSDToken  sdusd_,
+        OracleToken oracle_
+        ) public{
         seth = seth_;
         sdusd = sdusd_;
         oracle = oracle_;
     }
     
-    //实现所有权转移
-    function transferOwnership(address newAdmin) onlyAdmin public{
-        admin = newAdmin;
-    }
-    //设置开关 
-    function setOffStatus(bool status) onlyAdmin public{
-        off = status;
+
+    function setFeeAccount(address _account) onlyAdmin public{
+        feeAccount = _account;
     }
     
-    function setFeeAccount(address account) onlyAdmin public{
-        feeAccount = account;
+    function setNewAccount(address _account) onlyAdmin public{
+        newAccount = _account;
+    }
+    
+    function setOldAccount(address _account) onlyAdmin public{
+        oldAccount = _account;
     }
     
     function setSETH(SETHToken seth_) onlyAdmin public{
@@ -99,7 +118,11 @@ contract SAR is Admin{
         oracle = oracle_;
     }
     
-    function owner(address addr) public view returns (address) {
+    function setSARToken(SARToken sar_) onlyAdmin public{
+        sar = sar_;
+    }
+    
+    function sarOwner(address addr) public view returns (address) {
         return sars[addr].owner;
     }
     
@@ -123,35 +146,35 @@ contract SAR is Admin{
         return sars[addr].lastHeight;
     }
     
-    function fee(address addr) public view returns (uint){
+    function fee(address addr) public view returns (uint256){
         return sars[addr].fee;
     }
 
-    function era() public constant returns (uint) {
+    function era() public view returns (uint) {
         return block.timestamp;
     }
     
-    function debtTop() internal returns(uint) {
+    function debtTop() public view returns(uint) {
         return oracle.getConfig("debt_top_c");
     }
     
-    function liquidateLineRate() internal returns(uint){
+    function liquidateLineRate() public view returns(uint){
         return oracle.getConfig("liquidate_line_rate_c");
     }
     
-    function liquidateDisRate() internal returns(uint){
+    function liquidateDisRate() public view returns(uint){
         return oracle.getConfig("liquidate_dis_rate_c");
     }
     
-    function feeRate() internal returns(uint){
+    function feeRate() public view returns(uint){
         return oracle.getConfig("fee_rate_c");
     }
 
-    function liquidateTopRate() internal returns(uint){
+    function liquidateTopRate() public view returns(uint){
         return oracle.getConfig("liquidate_top_rate_c");
     }
     
-    function ethPrice() internal returns(uint){
+    function ethPrice() public view returns(uint){
         return oracle.getPrice("eth_price"); //150.23=>15023  
     }
     
@@ -166,8 +189,40 @@ contract SAR is Admin{
         require(!sarStatus[msg.sender]);    //Check status
         sars[msg.sender] = Sar(msg.sender,0,0,0,0,block.number,0);
         sarStatus[msg.sender] = true;
-        Operated(msg.sender,TYPE_OPEN,0);
+        emit Operated(msg.sender,TYPE_OPEN,0);
+        return true;
+    }
     
+    /**An example of upgrade 'accept' method, the createSAR interface should been 
+      * implemented in the following new SAR contract
+      **/
+    // function createSAR(address addr,uint256 locked,uint256 hasDrawed,uint256 bondLocked,
+    //                     uint256 bondDrawed,uint256 lastHeight,uint256 fee) 
+    //     public returns(bool success) {
+        
+    // }
+    
+    //Migrate SAR account to new contract by owner of SAR
+    function migrateSAR() public returns(bool success){
+        require(off);
+        require(sarStatus[msg.sender]);
+         
+        uint256 hasDrawedMount = hasDrawed(msg.sender);
+        uint256 lockedMount = locked(msg.sender); 
+        uint256 bondLockedMount = bondLocked(msg.sender);
+        uint256 bondDrawedMount = bondDrawed(msg.sender);
+        uint256 lastHeightNumer = lastHeight(msg.sender);
+        uint256 feeMount = fee(msg.sender);
+        
+        //transfer seth to new sar
+        require(newAccount!= address(0));
+        
+        if(lockedMount>0){
+            require(sdusd.transfer(newAccount,lockedMount));
+        }
+        
+        require(sar.createSAR(msg.sender,lockedMount,hasDrawedMount,bondLockedMount,
+                bondDrawedMount,lastHeightNumer,feeMount));
         return true;
     }
     
@@ -175,10 +230,11 @@ contract SAR is Admin{
         require(off);
         require(wad>0);
         require(sarStatus[msg.sender]);    //Check status
-        require(msg.sender == owner(msg.sender));
-        require(seth.transferFrom(msg.sender,this,wad));
+        require(msg.sender == sarOwner(msg.sender));
+        require(seth.transferFrom(msg.sender,address(this),wad));
+        
         sars[msg.sender].locked = add(sars[msg.sender].locked, wad);
-        Operated(msg.sender,TYPE_RESERVE,wad);
+        emit Operated(msg.sender,TYPE_RESERVE,wad);
         return true;
     }
     
@@ -186,7 +242,7 @@ contract SAR is Admin{
         require(off);
         require(mount>0);
         require(sarStatus[msg.sender]);   
-        require(msg.sender == owner(msg.sender));
+        require(msg.sender == sarOwner(msg.sender));
         
         uint256 hasDrawedMount = hasDrawed(msg.sender);
         uint256 lockedMount = locked(msg.sender); 
@@ -196,7 +252,7 @@ contract SAR is Admin{
         
         require(seth.transfer(msg.sender,mount));
         sars[msg.sender].locked = sub(sars[msg.sender].locked, mount);
-        Operated(msg.sender,TYPE_WITHDRAW,mount);
+        emit Operated(msg.sender,TYPE_WITHDRAW,mount);
         return true;
     }
 
@@ -204,7 +260,7 @@ contract SAR is Admin{
         require(off);
         require(wad>0);
         require(sarStatus[msg.sender]);
-        require(msg.sender == owner(msg.sender));
+        require(msg.sender == sarOwner(msg.sender));
         
         uint256 hasDrawedMount = hasDrawed(msg.sender);
         require(debtTop() >= add(hasDrawedMount, wad));
@@ -226,7 +282,7 @@ contract SAR is Admin{
             sars[msg.sender].lastHeight = lastHeightNumer;
             sars[msg.sender].fee = currFee + fee(msg.sender);
         }
-        Operated(msg.sender,TYPE_EXPANDE,wad);
+        emit Operated(msg.sender,TYPE_EXPANDE,wad);
         return true;
     }
     
@@ -234,7 +290,7 @@ contract SAR is Admin{
         require(off);
         require(wad > 0);
         require(sarStatus[msg.sender]);
-        require(msg.sender == owner(msg.sender));
+        require(msg.sender == sarOwner(msg.sender));
         
         uint256 hasDrawedMount = hasDrawed(msg.sender);
         require(hasDrawedMount >= wad);
@@ -249,13 +305,15 @@ contract SAR is Admin{
         sars[msg.sender].lastHeight = lastHeightNumer;
         sars[msg.sender].fee = sub(add(currFee,fee(msg.sender)),needUSDFee);
         sars[msg.sender].hasDrawed = sub(hasDrawedMount, wad);
+
         if(feeAccount == address(0)){
-            feeAccount = admin;
+            feeAccount = owner;
         }
         require(sdusd.transferFrom(msg.sender,feeAccount,needUSDFee));
         sdusd.burn(msg.sender,wad);
-        Operated(msg.sender,TYPE_CONTR,wad);
-        Operatedfee(msg.sender,needUSDFee);
+        
+        emit Operated(msg.sender,TYPE_CONTR,wad);
+        emit Operatedfee(msg.sender,needUSDFee);
         return true;
     }
     
@@ -290,11 +348,11 @@ contract SAR is Admin{
         sars[dest].hasDrawed = sub(hasDrawedMount,wad);
         
         sars[msg.sender].locked = add(sars[msg.sender].locked,canClear);
-        Operated(msg.sender,TYPE_RESCUE,wad);
+        emit Operated(msg.sender,TYPE_RESCUE,wad);
         return true;
     }
     
-    function getRateClear(uint currentRate,uint rateClear) internal returns(uint){
+    function getRateClear(uint currentRate,uint rateClear) internal pure returns(uint){
         uint ret = rateClear;
         if (currentRate > 0 && rateClear > 0)
         {
@@ -308,7 +366,7 @@ contract SAR is Admin{
         return ret;
     }
     
-    function rescueT(uint256 bondMount) public  returns (bool success){
+    function rescueT(uint256 bondMount) public returns (bool success){
         require(off);
         require(bondMount > 0);
         require(sarStatus[msg.sender]);
@@ -342,7 +400,7 @@ contract SAR is Admin{
         sars[msg.sender].bondLocked = add(sars[msg.sender].bondLocked,canClear);
         sars[msg.sender].bondDrawed = add(sars[msg.sender].bondDrawed,bondMount);
         bondGlobal = add(bondGlobal,bondMount);
-        Operated(msg.sender,TYPE_RESCUE_T,bondMount);
+        emit Operated(msg.sender,TYPE_RESCUE_T,bondMount);
         return true;
     }
     
@@ -351,7 +409,7 @@ contract SAR is Admin{
         require(mount > 0);
         require(sarStatus[msg.sender]);
         require(bondStatus[msg.sender]);
-        require(msg.sender == owner(msg.sender));
+        require(msg.sender == sarOwner(msg.sender));
         
         uint256 lockedMount = locked(msg.sender); 
         uint256 bondDrawedMount = bondDrawed(msg.sender);
@@ -371,7 +429,7 @@ contract SAR is Admin{
         
         bondGlobal = sub(bondGlobal,mount);
         require(bondGlobal >= 0);
-        Operated(msg.sender,TYPE_WITHDRAW_T,mount);
+        emit Operated(msg.sender,TYPE_WITHDRAW_T,mount);
         return true;
     }
 
@@ -379,7 +437,7 @@ contract SAR is Admin{
     function close() public  returns (bool success){
         require(off);
         require(sarStatus[msg.sender]);
-        require(msg.sender == owner(msg.sender));
+        require(msg.sender == sarOwner(msg.sender));
         require(locked(msg.sender)==0);
         require(hasDrawed(msg.sender)==0);
         require(fee(msg.sender)==0);
@@ -388,7 +446,7 @@ contract SAR is Admin{
         
         sars[msg.sender].lastHeight=0;
         sarStatus[msg.sender] = false;
-        Operated(msg.sender,TYPE_CLOSE,0);
+        emit Operated(msg.sender,TYPE_CLOSE,0);
         return true;
     }
     
@@ -400,11 +458,11 @@ contract SAR is Admin{
         if(!sarStatus[msg.sender]){
             sars[msg.sender] = Sar(msg.sender,0,0,0,0,block.number,0);
             sarStatus[msg.sender] = true;
-            Operated(msg.sender,1,0);
+            emit Operated(msg.sender,1,0);
         }
 
         //require(msg.sender == owner(msg.sender));
-        require(seth.transferFrom(msg.sender,this,reserveMount));
+        require(seth.transferFrom(msg.sender,address(this),reserveMount));
         sars[msg.sender].locked = add(sars[msg.sender].locked, reserveMount);
         //Operated(msg.sender,2,reserveMount);
         
@@ -428,42 +486,10 @@ contract SAR is Admin{
             sars[msg.sender].lastHeight = lastHeightNumer;
             sars[msg.sender].fee = currFee + fee(msg.sender);
         }
-        Operated(msg.sender,TYPE_ONEKEY,expandeMount);
+        emit Operated(msg.sender,TYPE_ONEKEY,expandeMount);
         return true;
     }
     
-    function add(uint x, uint y) internal  returns (uint z) {
-        require((z = x + y) >= x);
-    }
-    function sub(uint x, uint y) internal  returns (uint z) {
-        require((z = x - y) <= x);
-    }
-    function mul(uint x, uint y) internal  returns (uint z) {
-        require(y == 0 || (z = x * y) / y == x);
-    }
-    
-    struct Sar 
-    {
-        //SAR owner
-        address owner;
 
-        //amount of locked collateral
-        uint256 locked;
-
-        //amount of issued sdusd  
-        uint256 hasDrawed;
-
-        //amount of used bond
-        uint256 bondLocked;
-
-        //amount of sdusd liquidated by bond
-        uint256 bondDrawed;
-
-        //block 
-        uint lastHeight;
-
-        //amount of stable fee(sdusd)
-        uint256 fee;
-    }
     
 }
