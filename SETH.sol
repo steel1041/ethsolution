@@ -1,4 +1,4 @@
-pragma solidity ^0.5.2;
+pragma solidity ^0.4.20;
 
 import "./admin.sol";
 
@@ -16,10 +16,14 @@ contract SETH is Admin {
     event Deposit(address indexed dst, uint wad);
     event Withdrawal(address indexed src, uint wad);
     
-    constructor() public payable {
-        _balances[msg.sender] += msg.value;
+    function SETH() public payable{
+    }
+    
+    function() external payable{
+        require(msg.value > 0);
+         _balances[msg.sender] += msg.value;
         _supply = add(_supply, msg.value);
-        emit Deposit(msg.sender, msg.value);
+        Deposit(msg.sender, msg.value);
     }
     
     function withdraw(uint wad) public {
@@ -27,7 +31,7 @@ contract SETH is Admin {
         _balances[msg.sender] -= wad;
         msg.sender.transfer(wad);
         _supply = sub(_supply, wad);
-        emit Withdrawal(msg.sender, wad);
+        Withdrawal(msg.sender, wad);
     }
 
     function transferFrom(address src, address dst, uint wad)
@@ -41,7 +45,7 @@ contract SETH is Admin {
         _balances[src] = sub(_balances[src], wad);
         _balances[dst] = add(_balances[dst], wad);
 
-        emit Transfer(src, dst, wad);
+        Transfer(src, dst, wad);
         return true;
     }
     
@@ -62,7 +66,7 @@ contract SETH is Admin {
     function approve(address guy, uint wad) public returns (bool) {
         _approvals[msg.sender][guy] = wad;
 
-        emit Approval(msg.sender, guy, wad);
+        Approval(msg.sender, guy, wad);
         return true;
     }
     

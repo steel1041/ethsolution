@@ -1,4 +1,4 @@
-pragma solidity ^0.5.2;
+pragma solidity ^0.4.20;
 
 import "./admin.sol";
 
@@ -19,7 +19,7 @@ contract SDUSD is Admin{
     event Transfer(address indexed src, address indexed dst, uint wad);
     
     
-    constructor () public {
+    function SDUSD () public {
         _balances[msg.sender] = 0;
         _supply = 0;
         
@@ -46,7 +46,7 @@ contract SDUSD is Admin{
     function approve(address guy, uint wad) public returns (bool) {
         _approvals[msg.sender][guy] = wad;
 
-        emit Approval(msg.sender, guy, wad);
+        Approval(msg.sender, guy, wad);
         return true;
     }
     
@@ -60,7 +60,7 @@ contract SDUSD is Admin{
         _balances[src] = sub(_balances[src], wad);
         _balances[dst] = add(_balances[dst], wad);
 
-        emit Transfer(src, dst, wad);
+        Transfer(src, dst, wad);
         return true;
     }
     
@@ -69,7 +69,7 @@ contract SDUSD is Admin{
         require(auths[msg.sender]);
         _balances[guy] = add(_balances[guy], wad);
         _supply = add(_supply, wad);
-        emit Mint(guy, wad);
+        Mint(guy, wad);
     }
     
     function burn(address guy, uint wad) public   {
@@ -77,7 +77,7 @@ contract SDUSD is Admin{
         require(auths[msg.sender]);
         _balances[guy] = sub(_balances[guy], wad);
         _supply = sub(_supply, wad);
-        emit Burn(guy, wad);
+        Burn(guy, wad);
     }
     
 }

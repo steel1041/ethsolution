@@ -1,4 +1,4 @@
-pragma solidity ^0.5.2;
+pragma solidity ^0.4.20;
 
 import "./admin.sol";
 
@@ -19,6 +19,7 @@ contract Oracle is Admin{
     uint96 public min = 0x1;
     
     event OracleOperated(address indexed from,string opType,uint256 opValue);
+    event AuthOperated(address indexed from,address indexed to,string opType);
     
     //Oracle config 
     struct Config
@@ -38,7 +39,7 @@ contract Oracle is Admin{
         uint debt_top_c;
     }
     
-    constructor () public {
+    function Oracle () public {
     }
     
     function set(address addr,uint128 price) public {
@@ -58,7 +59,7 @@ contract Oracle is Admin{
         uint128 ret = compute();
         if(ret>0){
             priceMapping[ethKey] = ret;
-            emit OracleOperated(msg.sender,ethKey,ret);
+            OracleOperated(msg.sender,ethKey,ret);
         }
     }
 
@@ -80,18 +81,20 @@ contract Oracle is Admin{
     
     function setAuth(address addr) public onlyAdmin returns(bool success){
         auths[addr] = true;
+        AuthOperated(msg.sender,addr,"set");
         return true;
     }
     
     function releaseAuth(address addr) public onlyAdmin returns(bool success){
         auths[addr] = false;
+        AuthOperated(msg.sender,addr,"unset");
         return true;
     }
     
     function setConfig(string memory key,uint128 value) public returns(bool success){
         require(auths[msg.sender]);
         configMapping[key] = value;
-        emit OracleOperated(msg.sender,key,value);
+        OracleOperated(msg.sender,key,value);
         return true;
     }
     
@@ -102,7 +105,7 @@ contract Oracle is Admin{
     function setPrice(string memory key,uint128 value) public returns(bool success){
         require(auths[msg.sender]);
         priceMapping[key]=value;
-        emit OracleOperated(msg.sender,key,value);
+        OracleOperated(msg.sender,key,value);
         return true;
     }
     
@@ -113,7 +116,7 @@ contract Oracle is Admin{
     function compute() public view returns (uint128 ret) {
         uint128[] memory wuts = new uint128[](uint96(next));
         uint96 ctr = 0;
-        for (uint96 i = 1; i < uint96(next); i++) {
+        for (uint96 i = 1; i < uint96(uint96(next)+1); i++) {
             if (values[uint96(i)] != 0) {
                     uint128 wut = values[uint96(i)];
                     if (ctr == 0 || wut >= wuts[ctr - 1]) {

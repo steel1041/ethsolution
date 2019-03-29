@@ -1,7 +1,12 @@
-pragma solidity ^0.5.2;
+pragma solidity ^0.4.20;
 
 import "./admin.sol";
 
+/**
+ * @author steel
+ * @title SAR Token
+ * @dev   
+ */
 contract SDUSDToken{
     function mint(address guy, uint wad) public;
     function burn(address guy, uint wad) public;
@@ -50,7 +55,7 @@ contract SAR is Admin{
     address public feeAccount;
     address public newAccount;
     address public oldAccount;
-    
+
     event Operated(address indexed from,uint opType,uint256 opValue);
     event Operatedfee(address indexed from,uint256 fee);
     
@@ -83,7 +88,7 @@ contract SAR is Admin{
         uint256 fee;
     }
     
-    constructor(
+    function SAR(
         SETHToken seth_,
         SDUSDToken  sdusd_,
         OracleToken oracle_
@@ -94,31 +99,31 @@ contract SAR is Admin{
     }
     
 
-    function setFeeAccount(address _account) onlyAdmin public{
+    function setFeeAccount(address _account) public onlyAdmin{
         feeAccount = _account;
     }
     
-    function setNewAccount(address _account) onlyAdmin public{
+    function setNewAccount(address _account) public onlyAdmin{
         newAccount = _account;
     }
     
-    function setOldAccount(address _account) onlyAdmin public{
+    function setOldAccount(address _account) public onlyAdmin{
         oldAccount = _account;
     }
     
-    function setSETH(SETHToken seth_) onlyAdmin public{
+    function setSETH(SETHToken seth_) public onlyAdmin{
         seth = seth_;
     }
     
-    function setSDUSD(SDUSDToken sdusd_) onlyAdmin public{
+    function setSDUSD(SDUSDToken sdusd_) public onlyAdmin{
         sdusd = sdusd_;
     }
     
-    function setOracle(OracleToken oracle_) onlyAdmin public{
+    function setOracle(OracleToken oracle_) public onlyAdmin{
         oracle = oracle_;
     }
     
-    function setSARToken(SARToken sar_) onlyAdmin public{
+    function setSARToken(SARToken sar_) public onlyAdmin{
         sar = sar_;
     }
     
@@ -189,7 +194,7 @@ contract SAR is Admin{
         require(!sarStatus[msg.sender]);    //Check status
         sars[msg.sender] = Sar(msg.sender,0,0,0,0,block.number,0);
         sarStatus[msg.sender] = true;
-        emit Operated(msg.sender,TYPE_OPEN,0);
+        Operated(msg.sender,TYPE_OPEN,0);
         return true;
     }
     
@@ -231,10 +236,10 @@ contract SAR is Admin{
         require(wad>0);
         require(sarStatus[msg.sender]);    //Check status
         require(msg.sender == sarOwner(msg.sender));
-        require(seth.transferFrom(msg.sender,address(this),wad));
+        require(seth.transferFrom(msg.sender,this,wad));
         
-        sars[msg.sender].locked = add(sars[msg.sender].locked, wad);
-        emit Operated(msg.sender,TYPE_RESERVE,wad);
+        sars[msg.sender].locked = add(locked(msg.sender), wad);
+        Operated(msg.sender,TYPE_RESERVE,wad);
         return true;
     }
     
@@ -252,7 +257,7 @@ contract SAR is Admin{
         
         require(seth.transfer(msg.sender,mount));
         sars[msg.sender].locked = sub(sars[msg.sender].locked, mount);
-        emit Operated(msg.sender,TYPE_WITHDRAW,mount);
+         Operated(msg.sender,TYPE_WITHDRAW,mount);
         return true;
     }
 
@@ -282,7 +287,7 @@ contract SAR is Admin{
             sars[msg.sender].lastHeight = lastHeightNumer;
             sars[msg.sender].fee = currFee + fee(msg.sender);
         }
-        emit Operated(msg.sender,TYPE_EXPANDE,wad);
+         Operated(msg.sender,TYPE_EXPANDE,wad);
         return true;
     }
     
@@ -312,8 +317,8 @@ contract SAR is Admin{
         require(sdusd.transferFrom(msg.sender,feeAccount,needUSDFee));
         sdusd.burn(msg.sender,wad);
         
-        emit Operated(msg.sender,TYPE_CONTR,wad);
-        emit Operatedfee(msg.sender,needUSDFee);
+         Operated(msg.sender,TYPE_CONTR,wad);
+         Operatedfee(msg.sender,needUSDFee);
         return true;
     }
     
@@ -348,7 +353,7 @@ contract SAR is Admin{
         sars[dest].hasDrawed = sub(hasDrawedMount,wad);
         
         sars[msg.sender].locked = add(sars[msg.sender].locked,canClear);
-        emit Operated(msg.sender,TYPE_RESCUE,wad);
+        Operated(msg.sender,TYPE_RESCUE,wad);
         return true;
     }
     
@@ -400,7 +405,7 @@ contract SAR is Admin{
         sars[msg.sender].bondLocked = add(sars[msg.sender].bondLocked,canClear);
         sars[msg.sender].bondDrawed = add(sars[msg.sender].bondDrawed,bondMount);
         bondGlobal = add(bondGlobal,bondMount);
-        emit Operated(msg.sender,TYPE_RESCUE_T,bondMount);
+        Operated(msg.sender,TYPE_RESCUE_T,bondMount);
         return true;
     }
     
@@ -417,7 +422,7 @@ contract SAR is Admin{
         
         require(bondLockedMount > 0);
         require(bondDrawedMount > 0);
-        require(bondLockedMount >= mount);
+        require(bondDrawedMount >= mount);
         
         sdusd.burn(msg.sender,mount);
         
@@ -429,7 +434,7 @@ contract SAR is Admin{
         
         bondGlobal = sub(bondGlobal,mount);
         require(bondGlobal >= 0);
-        emit Operated(msg.sender,TYPE_WITHDRAW_T,mount);
+        Operated(msg.sender,TYPE_WITHDRAW_T,mount);
         return true;
     }
 
@@ -446,7 +451,7 @@ contract SAR is Admin{
         
         sars[msg.sender].lastHeight=0;
         sarStatus[msg.sender] = false;
-        emit Operated(msg.sender,TYPE_CLOSE,0);
+        Operated(msg.sender,TYPE_CLOSE,0);
         return true;
     }
     
@@ -458,11 +463,11 @@ contract SAR is Admin{
         if(!sarStatus[msg.sender]){
             sars[msg.sender] = Sar(msg.sender,0,0,0,0,block.number,0);
             sarStatus[msg.sender] = true;
-            emit Operated(msg.sender,1,0);
+            Operated(msg.sender,1,0);
         }
 
         //require(msg.sender == owner(msg.sender));
-        require(seth.transferFrom(msg.sender,address(this),reserveMount));
+        require(seth.transferFrom(msg.sender,this,reserveMount));
         sars[msg.sender].locked = add(sars[msg.sender].locked, reserveMount);
         //Operated(msg.sender,2,reserveMount);
         
@@ -486,7 +491,7 @@ contract SAR is Admin{
             sars[msg.sender].lastHeight = lastHeightNumer;
             sars[msg.sender].fee = currFee + fee(msg.sender);
         }
-        emit Operated(msg.sender,TYPE_ONEKEY,expandeMount);
+        Operated(msg.sender,TYPE_ONEKEY,expandeMount);
         return true;
     }
     

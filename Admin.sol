@@ -1,4 +1,4 @@
-pragma solidity ^0.5.2;
+pragma solidity ^0.4.20;
 
 contract Admin {
     address public owner;
@@ -6,17 +6,17 @@ contract Admin {
     uint constant WAD = 10 ** 18;
     uint constant RAY = 10 ** 27;
     
-    constructor() public{
+    function Admin() public{
         owner = msg.sender;
     }
 
     modifier onlyAdmin {
-        require(msg.sender == owner,"Only owner can call this.");
+        require(msg.sender == owner);
         _;
     }
     
     modifier onlyOff {
-        require(off,"Only set off true.");
+        require(off);
         _;
     }
     
