@@ -330,19 +330,20 @@ contract SAR is Admin{
         uint256 hasDrawedMount = hasDrawed(dest);
         uint256 lockedMount = locked(dest); 
         
-        uint currentRate = mul(lockedMount,ethPrice())/mul(hasDrawedMount,100);
+        uint currentRate = mul(lockedMount,ethPrice())/hasDrawedMount;
+        
         uint rateClear = getRateClear(currentRate,liquidateDisRate());
         
-        require(mul(lockedMount,ethPrice())<mul(hasDrawedMount,liquidateLineRate()));
+        require(mul(lockedMount,ethPrice()) <= mul(hasDrawedMount,liquidateLineRate()));
         
         uint256 canClear = 0;
         if(currentRate>100 && currentRate<liquidateLineRate()){
-             canClear = wad / mul(ethPrice(),rateClear);
+             canClear = mul(wad,10000) / mul(ethPrice(),rateClear);
              
              require(canClear > 0);
              require(canClear < lockedMount);
              require(wad < hasDrawedMount);
-             require(mul(sub(hasDrawedMount,wad),liquidateTopRate()) > mul(sub(lockedMount,canClear),ethPrice()));
+             require(mul(sub(hasDrawedMount,wad),liquidateTopRate()) >= mul(sub(lockedMount,canClear),ethPrice()));
         }
         if(currentRate <= 100){
             require(hasDrawedMount==wad);
@@ -390,7 +391,7 @@ contract SAR is Admin{
         
         if(currentRate > 100 && currentRate < liquidateLineRate()){
             uint lastRate = mul(sub(lockedMount,canClear),ethPrice())/sub(hasDrawedMount,bondMount);
-            require(lastRate <= liquidateTopRate());
+            require(lastRate < liquidateTopRate());
         }
         
         if(canClear>=lockedMount){
