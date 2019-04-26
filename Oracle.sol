@@ -3,9 +3,10 @@ pragma solidity ^0.4.20;
 import "./admin.sol";
 
 contract Oracle is Admin{
-    string constant configKey = "configKey";
-    string constant priceKey = "priceKey";
-    string constant ethKey = "eth_price";
+  
+    string constant public configKey = "configKey";
+    string constant public priceKey = "priceKey";
+    string constant public ethKey = "eth_price";
     Config public config;
     
     mapping (string => uint)  configMapping;   //config
@@ -21,7 +22,7 @@ contract Oracle is Admin{
     event OracleOperated(address indexed from,string opType,uint256 opValue);
     event AuthOperated(address indexed from,address indexed to,string opType);
     
-    //Oracle config 
+     //Oracle config 
     struct Config
     {
         uint liquidate_line_rate_c;

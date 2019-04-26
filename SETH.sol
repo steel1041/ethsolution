@@ -7,28 +7,28 @@ contract SETH is Admin {
     string public symbol   = "SETH";
     uint256  public  decimals = 18;
 
-    uint256                                            _supply;
-    mapping (address => uint256)                       _balances;
-    mapping (address => mapping (address => uint256))  _approvals;
+    uint256       public                                      _supply;
+    mapping (address => uint256)    public                    _balances;
+    mapping (address => mapping (address => uint256))  public _approvals;
 
     event Approval(address indexed src, address indexed guy, uint wad);
     event Transfer(address indexed src, address indexed dst, uint wad);
     event Deposit(address indexed dst, uint wad);
     event Withdrawal(address indexed src, uint wad);
     
-    function SETH() public payable{
+    function SETH() public{
     }
     
-    function() external payable{
+    function() public payable{
         require(msg.value > 0);
-         _balances[msg.sender] += msg.value;
+        _balances[msg.sender] = add(_balances[msg.sender],msg.value);
         _supply = add(_supply, msg.value);
         Deposit(msg.sender, msg.value);
     }
     
     function withdraw(uint wad) public {
         require(_balances[msg.sender] >= wad);
-        _balances[msg.sender] -= wad;
+        _balances[msg.sender] = sub(_balances[msg.sender],wad);
         msg.sender.transfer(wad);
         _supply = sub(_supply, wad);
         Withdrawal(msg.sender, wad);
@@ -38,6 +38,8 @@ contract SETH is Admin {
         public
         returns (bool)
     {
+        require(wad>=0);
+        
         if (src != msg.sender && _approvals[src][msg.sender] != uint(-1)) {
             _approvals[src][msg.sender] = sub(_approvals[src][msg.sender], wad);
         }
@@ -60,10 +62,12 @@ contract SETH is Admin {
     }
 
     function transfer(address dst, uint wad) public returns (bool) {
+        require(wad>0);
         return transferFrom(msg.sender, dst, wad);
     }
 
     function approve(address guy, uint wad) public returns (bool) {
+        require(wad>=0);
         _approvals[msg.sender][guy] = wad;
 
         Approval(msg.sender, guy, wad);
